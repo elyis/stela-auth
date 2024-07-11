@@ -14,7 +14,7 @@ namespace STELA_AUTH.Core.IRepository
         Task<Account?> UpdateConfirmationCode(Guid id, string code);
         Task<Account?> VerifyConfirmationCode(Guid id, string email, string code);
         Task<IEnumerable<Account>> GetAllAccounts(int count, int offset, bool isOrderByAscending = true);
-        Task<Account?> Update(Guid id, string? firstName, string? lastName, string? email, AccountRole? role);
+        Task<Account?> Update(Guid id, string? firstName, string? lastName, AccountRole? role);
         Task<int> GetTotalAccounts();
         Task<Account?> Update(Guid id, string? firstName, string? lastName);
         Task<Account?> UpdateImage(Guid userId, string filename);

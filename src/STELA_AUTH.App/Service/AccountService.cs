@@ -30,7 +30,7 @@ namespace STELA_AUTH.App.Service
 
         public async Task<HttpStatusCode> PatchAccountCredentials(Guid accountId, PatchAccountCredentialsBody body)
         {
-            var result = await _accountRepository.Update(accountId, body.FirstName, body.LastName, body.Email, body.Role);
+            var result = await _accountRepository.Update(accountId, body.FirstName, body.LastName, body.Role);
             return result == null ? HttpStatusCode.BadRequest : HttpStatusCode.OK;
         }
 

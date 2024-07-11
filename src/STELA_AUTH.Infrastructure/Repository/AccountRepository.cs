@@ -165,7 +165,7 @@ namespace STELA_AUTH.Infrastructure.Repository
             return account;
         }
 
-        public async Task<Account?> Update(Guid id, string? firstName, string? lastName, string? email, AccountRole? role)
+        public async Task<Account?> Update(Guid id, string? firstName, string? lastName, AccountRole? role)
         {
             var account = await GetById(id);
             if (account == null)
@@ -176,9 +176,6 @@ namespace STELA_AUTH.Infrastructure.Repository
 
             if (lastName != null)
                 account.LastName = lastName;
-
-            if (email != null)
-                account.Email = email;
 
             if (role != null)
                 account.RoleName = role.ToString();

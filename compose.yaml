@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  stela-auth-api:
+    image: stela-auth:latest
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres-auth
+    environment:
+      - AUTH_DB_CONNECTION_STRING=Host=${AUTH_DB_HOST};Port=5432;Database=${AUTH_DB_DATABASE};Username=${AUTH_DB_USERNAME};Password=${AUTH_DB_PASSWORD}
+      - PASSWORD_HASH_KEY="${PASSWORD_HASH_KEY}"
+      - ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT}"
+
+      - JWT_AUTH_SECRET=${JWT_AUTH_SECRET}
+      - JWT_AUTH_ISSUER=${JWT_AUTH_ISSUER}
+      - JWT_AUTH_AUDIENCE=${JWT_AUTH_AUDIENCE}
+
+      - EMAIL_SENDER_NAME=${EMAIL_SENDER_NAME}
+      - EMAIL_SENDER_EMAIL=${EMAIL_SENDER_EMAIL}
+      - EMAIL_SMTP_SERVER=${EMAIL_SMTP_SERVER}
+      - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT}
+      - EMAIL_SENDER_PASSWORD=${EMAIL_SENDER_PASSWORD}
+
+  postgres-auth:
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=*Stela
+      - POSTGRES_DB=stela-auth-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-auth-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-auth-data:

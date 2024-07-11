@@ -10,7 +10,7 @@ using Swashbuckle.AspNetCore.Annotations;
 namespace STELA_AUTH.Api.Controllers.Api
 {
     [ApiController]
-    [Route("api")]
+    [Route("api/auth")]
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;

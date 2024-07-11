@@ -24,9 +24,9 @@
     <PackageReference Include="Swashbuckle.AspNetCore.Swagger" Version="6.6.2" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\STELA_AUTH.Infrastructure\STELA_AUTH.Infrastructure.csproj" />
     <ProjectReference Include="..\STELA_AUTH.Shared\STELA_AUTH.Shared.csproj" />
     <ProjectReference Include="..\STELA_AUTH.App\STELA_AUTH.App.csproj" />
+    <ProjectReference Include="..\STELA_AUTH.Infrastructure\STELA_AUTH.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

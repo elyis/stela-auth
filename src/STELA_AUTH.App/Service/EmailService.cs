@@ -43,7 +43,7 @@ namespace STELA_AUTH.App.Service
 
                 using var client = new SmtpClient();
                 client.CheckCertificateRevocation = false;
-                await client.ConnectAsync(_smtpServer, _smtpPort, true);
+                await client.ConnectAsync(_smtpServer, _smtpPort, false);
                 await client.AuthenticateAsync(_senderEmail.Address, _senderPassword);
                 await client.SendAsync(emailMessage);
                 await client.DisconnectAsync(true);
