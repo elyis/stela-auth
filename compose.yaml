@@ -2,15 +2,18 @@ version: '3.8'
 
 services:
   stela-auth-api:
-    image: stela-auth:latest
+    image: stela-auth-api:latest
+    restart: always
     ports:
       - "8080:80"
     depends_on:
-      - postgres-auth
+      rabbitmq:
+        condition: service_healthy
     environment:
       - AUTH_DB_CONNECTION_STRING=Host=${AUTH_DB_HOST};Port=5432;Database=${AUTH_DB_DATABASE};Username=${AUTH_DB_USERNAME};Password=${AUTH_DB_PASSWORD}
-      - PASSWORD_HASH_KEY="${PASSWORD_HASH_KEY}"
-      - ASPNETCORE_ENVIRONMENT="${ASPNETCORE_ENVIRONMENT}"
+      - PASSWORD_HASH_KEY=${PASSWORD_HASH_KEY}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - FILE_SERVER_URL=${FILE_SERVER_URL}
 
       - JWT_AUTH_SECRET=${JWT_AUTH_SECRET}
       - JWT_AUTH_ISSUER=${JWT_AUTH_ISSUER}
@@ -22,16 +25,111 @@ services:
       - EMAIL_SMTP_PORT=${EMAIL_SMTP_PORT}
       - EMAIL_SENDER_PASSWORD=${EMAIL_SENDER_PASSWORD}
 
-  postgres-auth:
+      - RABBITMQ_HOSTNAME=rabbitmq
+      - RABBITMQ_PROFILE_IMAGE_QUEUE_NAME=${RABBITMQ_PROFILE_IMAGE_QUEUE_NAME}
+      - RABBITMQ_USERNAME=${RABBITMQ_USERNAME}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+
+  stela-file-server:
+    image: stela-file-server
+    restart: always
+    ports:
+      - "8081:80"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_HOSTNAME=rabbitmq
+      - RABBITMQ_PROFILE_IMAGE_QUEUE_NAME=${RABBITMQ_PROFILE_IMAGE_QUEUE_NAME}
+      - RABBITMQ_ADDITIONAL_SERVICE_IMAGE_QUEUE_NAME=${RABBITMQ_ADDITIONAL_SERVICE_IMAGE_QUEUE_NAME}
+      - RABBITMQ_MEMORIAL_IMAGE_QUEUE_NAME=${RABBITMQ_MEMORIAL_IMAGE_QUEUE_NAME}
+      - RABBITMQ_PORTFOLIO_MEMORIAL_IMAGE_QUEUE_NAME=${RABBITMQ_PORTFOLIO_MEMORIAL_IMAGE_QUEUE_NAME}
+      - RABBITMQ_MATERIAL_IMAGE_QUEUE_NAME=${RABBITMQ_MATERIAL_IMAGE_QUEUE_NAME}
+      - RABBITMQ_USERNAME=${RABBITMQ_USERNAME}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+
+      - JWT_AUTH_SECRET=${JWT_AUTH_SECRET}
+      - JWT_AUTH_ISSUER=${JWT_AUTH_ISSUER}
+      - JWT_AUTH_AUDIENCE=${JWT_AUTH_AUDIENCE}
+
+      - FILE_SERVER_STORAGE_PATH=${FILE_SERVER_STORAGE_PATH}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+    volumes:
+      - file-server-data:${FILE_SERVER_STORAGE_PATH}
+
+  stela-content-server:
+    image: stela-content-server
+    restart: always
+    ports:
+      - "8082:80"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - CONTENT_DB_CONNECTION_STRING=Host=${CONTENT_DB_HOST};Port=5432;Database=${CONTENT_DB_DATABASE};Username=${CONTENT_DB_USERNAME};Password=${CONTENT_DB_PASSWORD}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+
+      - JWT_AUTH_SECRET=${JWT_AUTH_SECRET}
+      - JWT_AUTH_ISSUER=${JWT_AUTH_ISSUER}
+      - JWT_AUTH_AUDIENCE=${JWT_AUTH_AUDIENCE}
+
+      - RABBITMQ_HOSTNAME=rabbitmq
+      - RABBITMQ_USERNAME=${RABBITMQ_USERNAME}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+
+      - RABBITMQ_PROFILE_IMAGE_QUEUE_NAME=${RABBITMQ_PROFILE_IMAGE_QUEUE_NAME}
+      - RABBITMQ_ADDITIONAL_SERVICE_IMAGE_QUEUE_NAME=${RABBITMQ_ADDITIONAL_SERVICE_IMAGE_QUEUE_NAME}
+      - RABBITMQ_MEMORIAL_IMAGE_QUEUE_NAME=${RABBITMQ_MEMORIAL_IMAGE_QUEUE_NAME}
+      - RABBITMQ_MATERIAL_IMAGE_QUEUE_NAME=${RABBITMQ_MATERIAL_IMAGE_QUEUE_NAME}
+      - RABBITMQ_PORTFOLIO_MEMORIAL_IMAGE_QUEUE_NAME=${RABBITMQ_PORTFOLIO_MEMORIAL_IMAGE_QUEUE_NAME}
+
+  rabbitmq:
+    image: rabbitmq:management
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    hostname: rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USERNAME}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit disk_free_limit 2147483648
+    volumes:
+      - rabbitmq:/var/lib/rabbitmq
+
+  postgres-content-db:
     image: postgres:latest
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=*Stela
-      - POSTGRES_DB=stela-auth-db
+      - POSTGRES_USER=${CONTENT_DB_USERNAME}
+      - POSTGRES_PASSWORD=${CONTENT_DB_PASSWORD}
+      - POSTGRES_DB=${CONTENT_DB_DATABASE}
     ports:
-      - "5432:5432"
+      - "5434:5432"
+    volumes:
+      - postgres-content-data:/var/lib/postgresql/data
+
+  postgres-auth-db:
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=${AUTH_DB_USERNAME}
+      - POSTGRES_PASSWORD=${AUTH_DB_PASSWORD}
+      - POSTGRES_DB=${AUTH_DB_DATABASE}
+    ports:
+      - "5433:5432"
     volumes:
       - postgres-auth-data:/var/lib/postgresql/data
 
 volumes:
   postgres-auth-data:
+  postgres-content-data:
+  rabbitmq:
+  file-server-data:

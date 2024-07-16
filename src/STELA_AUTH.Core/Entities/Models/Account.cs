@@ -37,7 +37,7 @@ namespace STELA_AUTH.Core.Entities.Models
                 LastName = LastName,
                 Phone = Phone,
                 IsEmailVerified = IsEmailVerified,
-                UrlImage = string.IsNullOrEmpty(Image) ? null : $"{Constants.WebPathToProfileIcons}{Image}",
+                UrlImage = string.IsNullOrEmpty(Image) ? null : $"{Constants.WebUrlToProfileImage}/{Image}",
             };
         }
 

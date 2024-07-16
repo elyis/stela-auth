@@ -87,7 +87,7 @@ namespace STELA_AUTH.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Accounts");
+                    b.ToTable("Accounts", (string)null);
                 });
 
             modelBuilder.Entity("STELA_AUTH.Core.Entities.Models.UnconfirmedAccount", b =>
@@ -121,7 +121,7 @@ namespace STELA_AUTH.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("UnconfirmedAccounts");
+                    b.ToTable("UnconfirmedAccounts", (string)null);
                 });
 #pragma warning restore 612, 618
         }

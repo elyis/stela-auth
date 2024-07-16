@@ -1,10 +1,8 @@
-using System.ComponentModel.DataAnnotations;
 using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STELA_AUTH.Core.Entities.Request;
 using STELA_AUTH.Core.Entities.Response;
-using STELA_AUTH.Core.IRepository;
 using STELA_AUTH.Core.IService;
 using Swashbuckle.AspNetCore.Annotations;
 
@@ -39,7 +37,7 @@ namespace STELA_AUTH.Api.Controllers.Api
             var tokenPayload = _jwtService.GetTokenPayload(token);
             var result = await _accountService.GetById(tokenPayload.AccountId);
 
-            if(result.StatusCode == HttpStatusCode.OK)
+            if (result.StatusCode == HttpStatusCode.OK)
                 return Ok(result.Body);
 
             return StatusCode((int)result.StatusCode);
@@ -57,7 +55,7 @@ namespace STELA_AUTH.Api.Controllers.Api
         {
             var tokenPayload = _jwtService.GetTokenPayload(token);
             var result = await _accountService.PatchAccountCredentials(tokenPayload.AccountId, body);
-            return StatusCode((int) result);
+            return StatusCode((int)result);
         }
 
         // [HttpPatch("me/email"), Authorize]
@@ -92,7 +90,7 @@ namespace STELA_AUTH.Api.Controllers.Api
         {
             var tokenPayload = _jwtService.GetTokenPayload(token);
             var result = await _accountService.VerifyConfirmationCode(tokenPayload.AccountId, body.Email, body.Code);
-            return StatusCode((int) result);
+            return StatusCode((int)result);
         }
     }
 }
