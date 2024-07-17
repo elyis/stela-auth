@@ -175,7 +175,7 @@ void ConfigureSwagger(IServiceCollection services)
         options.SwaggerDoc("v1", new OpenApiInfo
         {
             Version = "v1",
-            Title = "stela_api",
+            Title = "stela_auth_api",
             Description = "Api",
         });
 
