@@ -16,19 +16,16 @@ namespace STELA_AUTH.Infrastructure.Repository
         private readonly AuthDbContext _context;
         private readonly Hmac512Provider _passwordHasher;
         private readonly IDistributedCache _distributedCache;
-        private readonly ILogger<AccountRepository> _logger;
         private const string _prefixKey = "account_";
 
         public AccountRepository(
             AuthDbContext context,
             Hmac512Provider passwordHasher,
-            IDistributedCache distributedCache,
-            ILogger<AccountRepository> logger)
+            IDistributedCache distributedCache)
         {
             _context = context;
             _passwordHasher = passwordHasher;
             _distributedCache = distributedCache;
-            _logger = logger;
         }
 
         public async Task<Account?> GetById(Guid id)
@@ -278,12 +275,10 @@ namespace STELA_AUTH.Infrastructure.Repository
         private async Task<Account?> GetAccountAsync(string keySuffix, Expression<Func<Account, bool>> predicate)
         {
             var key = GetCacheKey(keySuffix);
-            _logger.LogInformation("Getting account from cache with key: {key}", key);
             var account = await GetFromCacheAsync<Account>(key);
             if (account != null)
                 return account;
 
-            _logger.LogInformation("Getting account from database");
             account = await _context.Accounts.AsNoTracking().FirstOrDefaultAsync(predicate);
             if (account != null)
                 await CacheSetAsync(key, account, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4));
@@ -298,7 +293,6 @@ namespace STELA_AUTH.Infrastructure.Repository
                 AbsoluteExpiration = DateTime.Now.Add(absoluteExpiration)
             };
             var serializedData = JsonSerializer.Serialize(data);
-            _logger.LogInformation("Caching account with key: {key} with value: {value}", key, serializedData);
             await _distributedCache.SetStringAsync(key, serializedData, options);
         }
 
