@@ -9,7 +9,7 @@ namespace STELA_AUTH.Core.IRepository
         Task<Account?> GetById(Guid id);
         Task<Account?> GetByEmail(string email);
         Task<Account?> ChangePassword(Guid id, string password, string newPassword);
-        Task<string?> UpdateTokenAsync(string refreshToken, Guid userId, TimeSpan? duration = null);
+        Task<string?> UpdateTokenAsync(string refreshToken, Guid accountId, TimeSpan? duration = null);
         Task<Account?> GetByTokenAsync(string refreshTokenHash);
         Task<Account?> UpdateConfirmationCode(Guid id, string code);
         Task<Account?> VerifyConfirmationCode(Guid id, string email, string code);
@@ -17,8 +17,6 @@ namespace STELA_AUTH.Core.IRepository
         Task<Account?> Update(Guid id, string? firstName, string? lastName, AccountRole? role);
         Task<int> GetTotalAccounts();
         Task<Account?> Update(Guid id, string? firstName, string? lastName);
-        Task<Account?> UpdateImage(Guid userId, string filename);
-        Task<bool> RemoveAccount(Guid id);
-        Task<bool> RemoveAccount(string email);
+        Task<Account?> UpdateImage(Guid accountId, string filename);
     }
 }

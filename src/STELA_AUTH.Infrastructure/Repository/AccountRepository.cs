@@ -1,4 +1,8 @@
+using System.Linq.Expressions;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Logging;
 using STELA_AUTH.Core.Entities.Models;
 using STELA_AUTH.Core.Enums;
 using STELA_AUTH.Core.IRepository;
@@ -11,52 +15,76 @@ namespace STELA_AUTH.Infrastructure.Repository
     {
         private readonly AuthDbContext _context;
         private readonly Hmac512Provider _passwordHasher;
-        public AccountRepository(AuthDbContext context, Hmac512Provider passwordHasher)
+        private readonly IDistributedCache _distributedCache;
+        private readonly ILogger<AccountRepository> _logger;
+        private const string _prefixKey = "account_";
+
+        public AccountRepository(
+            AuthDbContext context,
+            Hmac512Provider passwordHasher,
+            IDistributedCache distributedCache,
+            ILogger<AccountRepository> logger)
         {
             _context = context;
             _passwordHasher = passwordHasher;
+            _distributedCache = distributedCache;
+            _logger = logger;
         }
 
         public async Task<Account?> GetById(Guid id)
-            => await _context.Accounts
-                .FirstOrDefaultAsync(e => e.Id == id);
-
-        public async Task<Account?> GetByEmail(string email)
-            => await _context.Accounts
-                .FirstOrDefaultAsync(e => e.Email == email);
-
-        public async Task<Account?> GetByTokenAsync(string refreshTokenHash)
-            => await _context.Accounts
-            .FirstOrDefaultAsync(e => e.Token == refreshTokenHash);
-
-        public async Task<Account?> UpdateImage(Guid userId, string filename)
         {
-            var user = await GetById(userId);
-            if (user == null)
-                return null;
-
-            user.Image = filename;
-            await _context.SaveChangesAsync();
-            return user;
+            return await GetAccountAsync(id.ToString(), e => e.Id == id);
         }
 
-        public async Task<string?> UpdateTokenAsync(string refreshToken, Guid userId, TimeSpan? duration = null)
+        public async Task<Account?> GetByEmail(string email)
         {
-            var user = await GetById(userId);
-            if (user == null)
+            return await GetAccountAsync(email, e => e.Email == email);
+        }
+
+        public async Task<Account?> GetByTokenAsync(string refreshTokenHash)
+        {
+            return await GetAccountAsync($"account_token_{refreshTokenHash}", e => e.Token == refreshTokenHash);
+        }
+
+        public async Task<Account?> UpdateImage(Guid accountId, string filename)
+        {
+            var account = await GetById(accountId);
+            if (account == null)
+                return null;
+
+            AttachAccountEntityIfNotAttached(account);
+
+            account.Image = filename;
+            await _context.SaveChangesAsync();
+
+            var key = GetCacheKey(accountId.ToString());
+            await CacheSetAsync(key, account, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4));
+
+            return account;
+        }
+
+        public async Task<string?> UpdateTokenAsync(string refreshToken, Guid accountId, TimeSpan? duration = null)
+        {
+            var account = await GetById(accountId);
+            if (account == null)
                 return null;
 
             if (duration == null)
                 duration = TimeSpan.FromDays(15);
 
-            if (user.TokenValidBefore <= DateTime.UtcNow || user.TokenValidBefore == null)
+            if (account.TokenValidBefore <= DateTime.UtcNow || account.TokenValidBefore == null)
             {
-                user.TokenValidBefore = DateTime.UtcNow.Add((TimeSpan)duration);
-                user.Token = refreshToken;
+                AttachAccountEntityIfNotAttached(account);
+
+                account.TokenValidBefore = DateTime.UtcNow.Add((TimeSpan)duration);
+                account.Token = refreshToken;
                 await _context.SaveChangesAsync();
             }
 
-            return user.Token;
+            var key = GetCacheKey(accountId.ToString());
+            await CacheSetAsync(key, account, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4));
+
+            return account.Token;
         }
 
         public async Task<Account?> UpdateConfirmationCode(Guid id, string code)
@@ -65,9 +93,14 @@ namespace STELA_AUTH.Infrastructure.Repository
             if (account == null)
                 return null;
 
+            AttachAccountEntityIfNotAttached(account);
+
             account.ConfirmationCode = code;
             account.ConfirmationCodeValidBefore = DateTime.UtcNow.AddMinutes(5);
             await _context.SaveChangesAsync();
+
+            var key = GetCacheKey(id.ToString());
+            await CacheSetAsync(key, account, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4));
 
             return account;
         }
@@ -82,6 +115,8 @@ namespace STELA_AUTH.Infrastructure.Repository
             if (hashPassword != account.PasswordHash)
                 return null;
 
+            AttachAccountEntityIfNotAttached(account);
+
             account.PasswordHash = _passwordHasher.Compute(newPassword);
             account.LastPasswordDateModified = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -91,48 +126,38 @@ namespace STELA_AUTH.Infrastructure.Repository
 
         public async Task<IEnumerable<Account>> GetAllAccounts(int count, int offset, bool isOrderByAscending = true)
         {
-            var query = _context.Accounts.Take(count).Skip(offset);
+            var query = _context.Accounts.Take(count)
+                                         .Skip(offset);
             if (isOrderByAscending)
                 query = query.OrderBy(e => e.CreatedAt);
             else
                 query = query.OrderByDescending(e => e.CreatedAt);
 
+            var key = GetCacheKey($"all{count}_{offset}");
+            await CacheSetAsync(key, query.ToList(), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2));
+
             return await query.ToListAsync();
         }
 
-        public async Task<int> GetTotalAccounts() => await _context.Accounts.CountAsync();
-
-        public async Task<bool> RemoveAccount(Guid id)
+        public async Task<int> GetTotalAccounts()
         {
-            var account = await GetById(id);
-            if (account != null)
-            {
-                _context.Accounts.Remove(account);
-                await _context.SaveChangesAsync();
-            }
+            var key = "accounts_total";
+            var cachedData = await GetFromCacheAsync<int>(key);
+            if (cachedData != null)
+                return cachedData;
 
-            return true;
-        }
-
-        public async Task<bool> RemoveAccount(string email)
-        {
-            var account = await GetByEmail(email);
-            if (account != null)
-            {
-                _context.Accounts.Remove(account);
-                await _context.SaveChangesAsync();
-            }
-
-            return true;
+            var total = await _context.Accounts.CountAsync();
+            await CacheSetAsync(key, total, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1));
+            return total;
         }
 
         public async Task<Account?> AddAsync(string firstName, string lastName, string email, string passwordHash, string role)
         {
-            var oldUser = await GetByEmail(email);
-            if (oldUser != null)
+            var account = await GetByEmail(email);
+            if (account != null)
                 return null;
 
-            var newUser = new Account
+            account = new Account
             {
                 Email = email,
                 PasswordHash = passwordHash,
@@ -142,8 +167,11 @@ namespace STELA_AUTH.Infrastructure.Repository
                 IsEmailVerified = true,
             };
 
-            var result = await _context.Accounts.AddAsync(newUser);
+            var result = await _context.Accounts.AddAsync(account);
             await _context.SaveChangesAsync();
+
+            var key = GetCacheKey(account.Id.ToString());
+            await CacheSetAsync(key, account, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4));
             return result?.Entity;
         }
 
@@ -156,48 +184,130 @@ namespace STELA_AUTH.Infrastructure.Repository
             if (account.ConfirmationCode != code || account.ConfirmationCodeValidBefore < DateTime.UtcNow)
                 return null;
 
+            AttachAccountEntityIfNotAttached(account);
+
             account.IsEmailVerified = true;
             account.Email = email;
             account.ConfirmationCode = null;
             account.ConfirmationCodeValidBefore = null;
 
             await _context.SaveChangesAsync();
+
+            var key = GetCacheKey(account.Id.ToString());
+            await CacheSetAsync(key, account, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4));
             return account;
         }
 
         public async Task<Account?> Update(Guid id, string? firstName, string? lastName, AccountRole? role)
         {
+            bool isUpdated = false;
+
             var account = await GetById(id);
             if (account == null)
                 return null;
 
             if (firstName != null)
+            {
                 account.FirstName = firstName;
+                isUpdated = true;
+            }
 
             if (lastName != null)
+            {
                 account.LastName = lastName;
+                isUpdated = true;
+            }
 
             if (role != null)
+            {
                 account.RoleName = role.ToString();
+                isUpdated = true;
+            }
 
-            await _context.SaveChangesAsync();
+            if (isUpdated)
+            {
+                AttachAccountEntityIfNotAttached(account);
+
+                await _context.SaveChangesAsync();
+
+                var key = GetCacheKey(account.Id.ToString());
+                await CacheSetAsync(key, account, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4));
+            }
             return account;
         }
 
         public async Task<Account?> Update(Guid id, string? firstName, string? lastName)
         {
+            bool isUpdated = false;
+
             var account = await GetById(id);
             if (account == null)
                 return null;
 
             if (firstName != null)
+            {
                 account.FirstName = firstName;
+                isUpdated = true;
+            }
 
             if (lastName != null)
+            {
                 account.LastName = lastName;
+                isUpdated = true;
+            }
 
-            await _context.SaveChangesAsync();
+            if (isUpdated)
+            {
+                AttachAccountEntityIfNotAttached(account);
+
+                await _context.SaveChangesAsync();
+
+                var key = GetCacheKey(account.Id.ToString());
+                await CacheSetAsync(key, account, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4));
+            }
             return account;
         }
+
+        private void AttachAccountEntityIfNotAttached(Account account)
+        {
+            var localAccount = _context.Accounts.Local.FirstOrDefault(e => e.Id == account.Id);
+            if (localAccount == null)
+                _context.Attach(account);
+        }
+
+        private async Task<Account?> GetAccountAsync(string keySuffix, Expression<Func<Account, bool>> predicate)
+        {
+            var key = GetCacheKey(keySuffix);
+            _logger.LogInformation("Getting account from cache with key: {key}", key);
+            var account = await GetFromCacheAsync<Account>(key);
+            if (account != null)
+                return account;
+
+            _logger.LogInformation("Getting account from database");
+            account = await _context.Accounts.AsNoTracking().FirstOrDefaultAsync(predicate);
+            if (account != null)
+                await CacheSetAsync(key, account, TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4));
+            return account;
+        }
+
+        private async Task CacheSetAsync<T>(string key, T data, TimeSpan slidingExpiration, TimeSpan absoluteExpiration)
+        {
+            var options = new DistributedCacheEntryOptions
+            {
+                SlidingExpiration = slidingExpiration,
+                AbsoluteExpiration = DateTime.Now.Add(absoluteExpiration)
+            };
+            var serializedData = JsonSerializer.Serialize(data);
+            _logger.LogInformation("Caching account with key: {key} with value: {value}", key, serializedData);
+            await _distributedCache.SetStringAsync(key, serializedData, options);
+        }
+
+        private async Task<T?> GetFromCacheAsync<T>(string key)
+        {
+            var cachedData = await _distributedCache.GetStringAsync(key);
+            return cachedData != null ? JsonSerializer.Deserialize<T>(cachedData) : default;
+        }
+
+        private string GetCacheKey(string identifier) => $"{_prefixKey}{identifier}";
     }
 }

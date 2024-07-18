@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using STELA_AUTH.App.Service;
-using STELA_AUTH.Core.Entities.Models;
 using STELA_AUTH.Core.Enums;
 using STELA_AUTH.Core.IRepository;
 using STELA_AUTH.Core.IService;
@@ -52,6 +51,7 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
     var rabbitMqQProfileImageQueueName = GetEnvVar("RABBITMQ_PROFILE_IMAGE_QUEUE_NAME");
     var rabbitMqUserName = GetEnvVar("RABBITMQ_USERNAME");
     var rabbitMqPassword = GetEnvVar("RABBITMQ_PASSWORD");
+    var redisConnectionString = GetEnvVar("REDIS_CONNECTION_STRING");
 
     services.AddControllers(e =>
     {
@@ -86,6 +86,11 @@ void ConfigureServices(IServiceCollection services, IConfiguration configuration
         {
             builder.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
         });
+    });
+
+    services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
     });
 
     services.AddSingleton<Hmac512Provider>(provider => new Hmac512Provider(passwordHashKey));
